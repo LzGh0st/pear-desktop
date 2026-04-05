@@ -9,7 +9,7 @@ permissions: {}
 
 env:
   NODE_VERSION: "22.x"
-  RELEASE_FILE: "RELEASE_FLAG.txt"  # file that controls release
+  RELEASE_FILE: "RELEASE_FLAG.txt"
 
 jobs:
   build:
@@ -21,6 +21,9 @@ jobs:
       fail-fast: true
       matrix:
         os: [ macos-26, ubuntu-latest, windows-latest ]
+
+    outputs:
+      release: ${{ steps.release_check.outputs.release }}
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -56,14 +59,14 @@ jobs:
         id: release_check
         run: |
           if [ -f "${{ env.RELEASE_FILE }}" ] && grep -iq "yes" "${{ env.RELEASE_FILE }}"; then
-            echo "RELEASE=true" >> $GITHUB_ENV
+            echo "release=true" >> $GITHUB_OUTPUT
           else
-            echo "RELEASE=false" >> $GITHUB_ENV
+            echo "release=false" >> $GITHUB_OUTPUT
           fi
 
   release:
     needs: build
-    if: env.RELEASE == 'true'
+    if: needs.build.outputs.release == 'true'
     permissions:
       contents: write
     runs-on: ubuntu-latest
