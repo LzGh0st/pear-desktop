@@ -1,14 +1,15 @@
-name: Build Pear Desktop
+name: Build & Conditional Release Pear Desktop
 
 on:
   push:
     branches: [ master ]
-  workflow_dispatch:   # manual run allowed
+  workflow_dispatch:   # allows manual runs
 
 permissions: {}
 
 env:
   NODE_VERSION: "22.x"
+  RELEASE_FILE: "RELEASE_FLAG.txt"  # file that controls release
 
 jobs:
   build:
@@ -42,7 +43,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Vite Build
-        run: pnpm build   # always run
+        run: pnpm build
 
       - name: Test
         uses: coactions/setup-xvfb@b6b4fcfb9f5a895edadc3bc76318fae0ac17c8b3
@@ -51,13 +52,22 @@ jobs:
         with:
           run: pnpm test:debug
 
+      - name: Check for release
+        id: release_check
+        run: |
+          if [ -f "${{ env.RELEASE_FILE }}" ] && grep -iq "yes" "${{ env.RELEASE_FILE }}"; then
+            echo "RELEASE=true" >> $GITHUB_ENV
+          else
+            echo "RELEASE=false" >> $GITHUB_ENV
+          fi
+
   release:
+    needs: build
+    if: env.RELEASE == 'true'
     permissions:
       contents: write
     runs-on: ubuntu-latest
     name: Release Pear Desktop
-    if: github.ref == 'refs/heads/master'
-    needs: build
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
