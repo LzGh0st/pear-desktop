@@ -16,18 +16,16 @@ jobs:
     runs-on: ubuntu-latest
     name: Build and Release Pear Desktop
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v3
 
       - name: Install pnpm
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        uses: pnpm/action-setup@v3
         with:
           version: 10
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        uses: actions/setup-node@v3
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
@@ -38,53 +36,15 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Test
-        uses: coactions/setup-xvfb@b6b4fcfb9f5a895edadc3bc76318fae0ac17c8b3
-        env:
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+      - name: Build .deb packages
+        run: |
+          sudo apt update
+          sudo apt install -y dpkg-dev fakeroot
+          pnpm release:linux  # your script to create .deb files
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v1
         with:
-          run: pnpm test:debug
-
-      - name: Get version
-        run: |
-          echo "VERSION_TAG=v$(node -pe "require('./package.json').version")" >> $GITHUB_ENV
-
-      - name: Check if version already exists
-        run: |
-          echo "VERSION_HASH=$(git rev-parse -q --verify 'refs/tags/${{ env.VERSION_TAG }}')" >> $GITHUB_ENV
-          echo "CHANGELOG_ANCHOR=$(echo $VERSION_TAG | sed -e 's/\.//g')" >> $GITHUB_ENV
-
-      - name: Fetch draft release
-        if: ${{ env.VERSION_HASH == '' }}
-        uses: cardinalby/git-get-release-action@cedef2faf69cb7c55b285bad07688d04430b7ada
-        id: get_draft_release
+          files: "dist/*.deb"  # adjust path if your .deb output is different
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          latest: true
-          draft: true
-          searchLimit: 1
-
-      - name: Publish Release
-        uses: irongut/EditRelease@ccf529ad26dddf9996e7dd0f24ca5da4ea507cc2
-        with:
-          token: ${{ secrets.GH_TOKEN }}
-          id: ${{ steps.get_draft_release.outputs.id }}
-          draft: false
-          prerelease: false
-          replacename: true
-          name: ${{ env.VERSION_TAG }}
-          replacebody: true
-          body: |
-            See [changelog](https://github.com/LzGh0st/pear-desktop/blob/master/changelog.md#${{ env.CHANGELOG_ANCHOR }}) for updates.
-
-      - name: Update changelog
-        run: pnpm changelog
-
-      - name: Commit changelog
-        uses: stefanzweifel/git-auto-commit-action@04702edda442b2e678b25b537cec683a1493fcb9
-        with:
-          commit_message: Update changelog for ${{ env.VERSION_TAG }}
-          file_pattern: "changelog.md"
-          commit_user_name: CI
-          commit_user_email: th-ch@users.noreply.github.com
